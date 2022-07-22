@@ -8,8 +8,8 @@ const NlpClient = tencentcloud.nlp.v20190408.Client
 // 密钥可前往https://console.cloud.tencent.com/cam/capi网站进行获取
 const clientConfig = {
   credential: {
-    secretId: 'AKIDzoSs31nOlwud6KJ5dw0oNhrmSt40kGXa',
-    secretKey: 'rWyCAtNegU3NSHrBF4e192f3C5kALHyQ',
+    secretId: 'secretId',
+    secretKey: 'secretKey',
   },
   region: 'ap-guangzhou',
   profile: {
