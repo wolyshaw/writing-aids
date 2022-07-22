@@ -53,7 +53,9 @@ const Home: NextPage = (props) => {
 
   const formattedParagraph = async () => {
     if (editor.current) {
-      const texts = Array.from(editor.current.childNodes).map(el => el.textContent)
+      const texts = Array.from(editor.current.childNodes).map(
+        (el) => el.textContent
+      )
       const res = await FetchSummar(texts.join(''), type)
       console.log(res)
     }
@@ -65,7 +67,7 @@ const Home: NextPage = (props) => {
         method: 'POST',
         body: JSON.stringify({
           Type: NLPTypes[type as keyof typeof NLPTypes],
-          Text: text
+          Text: text,
         }),
       })
       return await res.json()
@@ -78,7 +80,9 @@ const Home: NextPage = (props) => {
     evt.stopPropagation()
     evt.preventDefault()
     try {
-      const res = await fetch(`/api/weibo?access_token=2.00M3XA9C05dPHo3db532b212IZBGvB&q=${keyword}&hasv=1&count=50&hasori=1`)
+      const res = await fetch(
+        `/api/weibo?access_token=token&q=${keyword}&hasv=1&count=50&hasori=1`
+      )
       const json = await res.json()
       const list: Text[] = []
       if (editor.current) {
@@ -86,7 +90,8 @@ const Home: NextPage = (props) => {
       }
       for (const item of json.statuses) {
         const span = document.createElement('span')
-        const content = (item as any).longText?.longTextContent || (item as any).text
+        const content =
+          (item as any).longText?.longTextContent || (item as any).text
         const text = document.createTextNode(content)
         const br = document.createElement('br')
         list.push(text)
@@ -94,14 +99,16 @@ const Home: NextPage = (props) => {
         editor.current?.append(span)
         editor.current?.append(br)
         // console.log(await FetchSummar(content, 'KeywordsExtraction'))
-        span.addEventListener('mouseenter', async evt => {
-          if ((evt.target as HTMLSpanElement).classList.contains('bg-sky-300')) {
+        span.addEventListener('mouseenter', async (evt) => {
+          if (
+            (evt.target as HTMLSpanElement).classList.contains('bg-sky-300')
+          ) {
             return
           }
           const selection = document.getSelection()
           const range = new Range()
-          range.setStart((evt.target as HTMLSpanElement), 0)
-          range.setEnd((evt.target as HTMLSpanElement), 1)
+          range.setStart(evt.target as HTMLSpanElement, 0)
+          range.setEnd(evt.target as HTMLSpanElement, 1)
 
           // selection?.removeAllRanges()
           // selection?.addRange(range)
@@ -110,11 +117,11 @@ const Home: NextPage = (props) => {
           // console.log(evt);
           // (evt.target as HTMLSpanElement).classList.add('bg-sky-300')
         })
-        span.addEventListener('mouseleave', async evt => {
+        span.addEventListener('mouseleave', async (evt) => {
           // console.log(evt);
           // (evt.target as HTMLSpanElement).classList.remove('bg-sky-300')
         })
-        span.addEventListener('click', async evt => {
+        span.addEventListener('click', async (evt) => {
           // (evt.target as HTMLSpanElement).classList.add('bg-sky-300')
           // console.log(await FetchSummar(content, type))
         })
@@ -135,7 +142,7 @@ const Home: NextPage = (props) => {
     // return () => document.removeEventListener('selectionchange', selectionChange)
   })
 
-  useKey(undefined, evt => console.log(evt))
+  useKey(undefined, (evt) => console.log(evt))
 
   return (
     <div className="container mx-auto">
@@ -146,13 +153,21 @@ const Home: NextPage = (props) => {
       </Head>
 
       <form onSubmit={FetchWeibo}>
-        <input placeholder="微博热点" value={keyword} onInput={evt => setKeyword((evt.target as HTMLInputElement).value)} />
-        <input type="submit" value="搜索"/>
+        <input
+          placeholder="微博热点"
+          value={keyword}
+          onInput={(evt) => setKeyword((evt.target as HTMLInputElement).value)}
+        />
+        <input type="submit" value="搜索" />
       </form>
 
       <ul
         className="menu-container"
-        onChange={(evt) => setType((evt.target as HTMLInputElement).value as keyof typeof NLPTypes)}
+        onChange={(evt) =>
+          setType(
+            (evt.target as HTMLInputElement).value as keyof typeof NLPTypes
+          )
+        }
       >
         {Object.keys(operation).map((key) => {
           const k = key as keyof typeof operation
@@ -181,10 +196,13 @@ const Home: NextPage = (props) => {
           contentEditable
           className="textarea text-justify"
           // onChange={(evt) => setTextarea(evt.target.value)}
-          dangerouslySetInnerHTML={{__html: textarea}}
+          dangerouslySetInnerHTML={{ __html: textarea }}
         ></div>
         {rect && (
-          <menu className={classnames('absolute', {hidden: !rect})} style={{left: rect.x, top: rect.top}}>
+          <menu
+            className={classnames('absolute', { hidden: !rect })}
+            style={{ left: rect.x, top: rect.top }}
+          >
             <button>相关热点</button>
           </menu>
         )}
