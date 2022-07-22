@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.menu-container {
+  @apply flex flex-row flex-wrap;
+}
+.menu-item {
+  @apply mx-2 my-2 py-2 block box-border text-center rounded-md shadow-xl cursor-pointer text-red-500 focus:outline-none hover:bg-gray-50 peer-checked:ring-red-500 peer-checked:ring-2 peer-checked:border-transparent;
+}
+
+.menu-li {
+  @apply basis-1/4;
+}
+
+.textarea {
+  @apply border border-red-500 rounded-md text-gray-700 placeholder-gray-400 px-2 py-1 w-full h-96 mt-12 overflow-y-auto;
+}
+.menu-button {
+  @apply px-4 border-r hover:bg-slate-100 py-2 text-sm;
+}
+.menu-button:last-child {
+  @apply border-none;
+}

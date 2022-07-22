@@ -1,0 +1,7 @@
+.menu-container {
+  @apply flex flex-row flex-wrap;
+}
+
+.menu-button {
+  @apply px-4;
+}
