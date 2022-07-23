@@ -24,6 +24,8 @@ export type Styles = {
   [key in SelectStatus]: CSSProperties
 }
 
+export type SpanElement = HTMLSpanElement | Node
+
 export const styles: Styles = {
   strong: {
     fontWeight: 'bold',
@@ -50,6 +52,7 @@ export type Span = {
 
 export type BlockMap = {
   spans: Span[]
+  rootEl?: HTMLDivElement
 }
 
 export class Editor {
@@ -91,8 +94,7 @@ export class Editor {
     this.el.addEventListener('keydown', (evt) => {
       if (evt.key === 'Enter') {
         evt.preventDefault()
-        const selection = window.getSelection()
-        const range = selection?.getRangeAt(0)
+        const range = this.getRange()
         // if (range?.commonAncestorContainer.nodeType === 3) {
         //   console.log(range)
         //   return
@@ -101,9 +103,9 @@ export class Editor {
           range?.startOffset === range?.endOffset &&
           range?.startOffset === 0
         ) {
-          this.insertBlock(selection?.focusNode, 'beforebegin')
+          this.insertBlock(range?.endContainer, 'beforebegin')
         } else {
-          this.insertBlock(selection?.focusNode)
+          this.insertBlock(range?.endContainer)
         }
       }
 
@@ -112,6 +114,11 @@ export class Editor {
           .composedPath()
           .find((el) => (el as HTMLElement).contentEditable) as HTMLElement
         if (!mostRecentElement.textContent) {
+          if (this.blocks.size === 1) {
+            // 最后一个不允许删除，清除所有html元素
+            mostRecentElement.innerHTML = ''
+            return
+          }
           const prevElement = mostRecentElement.previousElementSibling
           this.removeBlock(mostRecentElement)
           this.focusBlock(prevElement)
@@ -144,7 +151,7 @@ export class Editor {
     setFocusPosition(element!)
   }
 
-  getFocusElement(el?: HTMLElement | Node | null) {
+  getFocusElement(el?: SpanElement | null) {
     return getFocusElement(this.el, el)
   }
 
@@ -152,7 +159,7 @@ export class Editor {
     return createBlock()
   }
 
-  insertBlock(el?: HTMLElement | Node | null, pos?: InsertPosition) {
+  insertBlock(el?: SpanElement | null, pos?: InsertPosition) {
     const focusElement = this.getFocusElement(el)
     let block
     if (focusElement === this.el) {
@@ -162,6 +169,7 @@ export class Editor {
     }
     this.blocks.set(block, {
       spans: [],
+      rootEl: block,
     })
     return block
   }
@@ -174,10 +182,18 @@ export class Editor {
 
   public getBlock() {
     const range = this.getRange()
-    const contentEditableElement = this.getFocusElement(
-      range?.commonAncestorContainer
-    )
-    return this.blocks.get(contentEditableElement)
+    let el: HTMLDivElement
+    const ele: HTMLElement | null | undefined =
+      range?.commonAncestorContainer.nodeName === '#text'
+        ? range?.commonAncestorContainer.parentElement
+        : (range?.commonAncestorContainer as HTMLElement)
+    if (!ele?.contentEditable || ele?.contentEditable !== 'true') {
+      el =
+        ele?.closest('div[contentEditable="true"]') || (ele as HTMLDivElement)
+    } else {
+      el = ele as HTMLDivElement
+    }
+    return this.blocks.get(el)
   }
 
   public getSpansIndexOf() {
@@ -203,6 +219,9 @@ export class Editor {
     return -1
   }
 
+  /**
+   * 通过循环的方式获取当前选中的SpanELement状态
+   */
   public getSpanStatus() {
     const selectStatus = new Set<SelectStatus>([])
     const indexOf = this.getSpansIndexOf()
@@ -228,18 +247,239 @@ export class Editor {
     }
   }
 
+  getLeftElement(
+    childs: never[] | NodeListOf<ChildNode>,
+    el?: HTMLSpanElement | Node
+  ): ChildNode[] {
+    if (!el) return []
+    let spanElement: HTMLSpanElement
+    if (el.nodeName === '#text') {
+      spanElement = el.parentElement as HTMLSpanElement
+    }
+    spanElement = el as HTMLSpanElement
+    const eles: ChildNode[] = []
+    const prev = spanElement.previousSibling
+    for (const child of childs) {
+      if (child.textContent) {
+        eles.push(child as ChildNode)
+      }
+      if (prev === child) {
+        break
+      }
+    }
+    return eles
+  }
+
+  eqStatus(a: Set<SelectStatus>, b: Set<SelectStatus>) {
+    return Array.from(a).join(',') === Array.from(b).join(',')
+  }
+
+  /**
+   * 根据光标信息，拆分当前块的元素
+   * @returns [leftElement, rightElement]
+   */
+  getAssociationElement() {
+    const range = this.getRange()
+    const block = this.getBlock()
+    const cloneStart = range?.startContainer.cloneNode(true) as SpanElement
+    const cloneEnd = range?.endContainer.cloneNode(true) as SpanElement
+
+    let startElement: SpanElement
+    if (
+      cloneStart.nodeName === 'SPAN' ||
+      cloneStart.parentElement?.nodeName === 'SPAN'
+    ) {
+      startElement =
+        cloneStart.nodeName === 'SPAN'
+          ? (cloneStart! as HTMLSpanElement)
+          : (cloneStart.parentElement! as HTMLSpanElement)
+      startElement.textContent =
+        cloneStart.textContent?.substring(0, range!.startOffset) || ''
+    } else {
+      startElement = document.createTextNode(
+        cloneStart.textContent?.substring(0, range!.startOffset) || ''
+      )
+    }
+    let endElement: SpanElement
+    if (
+      cloneEnd.nodeName === 'SPAN' ||
+      cloneEnd.parentElement?.nodeName === 'SPAN'
+    ) {
+      endElement =
+        cloneEnd.nodeName === 'SPAN'
+          ? (cloneEnd! as HTMLSpanElement)
+          : (cloneEnd.parentElement! as HTMLSpanElement)
+      endElement.textContent =
+        cloneEnd.textContent?.substring(range!.endOffset) || ''
+    } else {
+      endElement = document.createTextNode(
+        cloneEnd.textContent?.substring(range!.endOffset) || ''
+      )
+    }
+    const leftEle: Array<SpanElement> = []
+    const activeEle: Array<SpanElement> = []
+    const rightEle: Array<SpanElement> = []
+    let currentPos: 'left' | 'active' | 'right' = 'left'
+    for (const child of block?.rootEl?.childNodes || []) {
+      const isInRange = range?.intersectsNode(child)
+      if (currentPos === 'active' && !isInRange) {
+        currentPos = 'right'
+      }
+      if (currentPos === 'left' && isInRange) {
+        currentPos = 'active'
+      }
+      if (currentPos === 'left') {
+        leftEle.push(child)
+      }
+      if (currentPos === 'active') {
+        activeEle.push(child)
+      }
+      if (currentPos === 'right') {
+        rightEle.push(child)
+      }
+    }
+    range?.deleteContents()
+    leftEle.push(startElement)
+    rightEle.unshift(endElement)
+    return [leftEle, rightEle]
+  }
+
+  setSpanElement(eles: (Node | HTMLElement)[], spans: Span[]) {
+    const block = this.getBlock()
+    for (let i = 0; i < eles.length; i++) {
+      const ele = eles[i]
+      const prevEle = eles[i - 1]
+      if (!ele || !ele.textContent) {
+        continue
+      }
+      const findEle =
+        block?.spans.findIndex(
+          (el) =>
+            (el.ele as HTMLSpanElement).dataset?.index ===
+            (ele as HTMLSpanElement).dataset?.index
+        ) ?? -1
+      let selectStatus: Set<SelectStatus> = new Set([])
+      if (findEle > -1 && block?.spans[findEle]) {
+        selectStatus = block?.spans[findEle].selectStatus
+      }
+
+      if (prevEle && prevEle.nodeName === '#text' && ele.nodeName === '#text') {
+        prevEle.textContent = prevEle.textContent + ele.textContent
+        continue
+      }
+      spans.push({
+        ele: ele,
+        index: 0,
+        selectStatus,
+      })
+    }
+  }
+
+  getSelectStattus(el: HTMLSpanElement) {
+    const block = this.getBlock()
+    const spans = block?.spans || []
+
+    for (const span of spans) {
+      if ((span.ele as HTMLSpanElement).dataset.index === el.dataset.index) {
+        return span
+      }
+    }
+  }
+
   public spickBlock(option: { type: SelectStatus }) {
+    const range = this.getRange()
+    const block = this.getBlock()
+    const cloneContent = range?.cloneContents()
+    const [leftEle, rightEle] = this.getAssociationElement()
+    if (block?.rootEl) {
+      block.rootEl.innerHTML = ''
+      block.spans = []
+    }
+    this.setSpanElement(leftEle, block?.spans || [])
+    let prevSelectStatus: Set<SelectStatus> | undefined
+    let prevElement: HTMLSpanElement | undefined
+    let selectedElements: Array<HTMLSpanElement | Node> = []
+    for (let i = 0; i < (cloneContent?.childNodes || []).length; i++) {
+      let selectStatus: Set<SelectStatus> = new Set([option.type])
+      let ele = cloneContent?.childNodes[i]
+      if (!ele) {
+        continue
+      }
+      if (ele?.nodeName === '#text') {
+        const span = document.createElement('span')
+        span.textContent = ele.textContent
+        ele = span
+      }
+      if (
+        prevElement &&
+        prevSelectStatus &&
+        this.eqStatus(selectStatus, prevSelectStatus)
+      ) {
+        prevElement.textContent =
+          (prevElement.textContent || '') + ele.textContent
+        continue
+      }
+
+      prevSelectStatus = selectStatus
+      prevElement = ele as HTMLSpanElement
+      selectedElements.push(ele)
+      block?.spans.push({
+        ele,
+        index: 0,
+        selectStatus,
+      })
+    }
+    this.setSpanElement(rightEle, block?.spans || [])
+    let spanIndex = 0
+    for (const span of block?.spans || []) {
+      let spanEl: HTMLSpanElement | Node
+      if (span.ele.nodeName === '#text') {
+        spanEl = span.ele
+      } else {
+        spanEl = span.ele as HTMLSpanElement
+        ;(spanEl as HTMLSpanElement).dataset.index = '' + spanIndex
+        spanIndex++
+        for (const status of span.selectStatus.values()) {
+          for (const [k, v] of Object.entries(styles[status])) {
+            ;(spanEl as HTMLSpanElement).style[k as any] = v as any
+          }
+        }
+      }
+
+      block?.rootEl?.append(spanEl)
+    }
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.selectAllChildren(selectedElements[0])
+    // block?.spans.push()
+  }
+
+  /**
+   * 操作block所有操作均在当前block中，避免大范围修改
+   */
+  public spickBlock2(option: { type: SelectStatus }) {
     const hasType = this.getSpanStatus().has(option.type)
     const block = this.getBlock()
     const range = this.getRange()
     const cloneContent = range?.cloneContents()
     range?.deleteContents()
     const fragment = document.createDocumentFragment()
+    /**
+     * 将选中的所有Node与Element循环，进行拆分，并且将拆分后的child转化成SpanElement放入一个片段中，后续一次性插入到选中前并删除选中内容
+     */
     for (const child of Array.from(cloneContent?.childNodes || [])) {
       const spanels = block?.spans.map((item) => item.ele) || []
       let s: Span | undefined
+      /**
+       * 有内容的Node替换为SpanElement，并且添加需要的操作
+       */
+      if (!child.textContent) {
+        child.remove()
+        continue
+      }
       if (child.nodeName === '#text' && child?.textContent) {
         const span = document.createElement('span')
+        console.log(block?.spans.length)
         const index = block?.spans.length || 0
         span.dataset.index = '' + index
         span.textContent = child.textContent || ''
@@ -251,6 +491,9 @@ export class Editor {
         block?.spans.push(s)
         fragment.append(span)
       }
+      /**
+       * 有内容的SpanElement 添加或者删除多余的选择操作
+       */
       if (child.nodeName === 'SPAN' && child.textContent) {
         const indexOf = spanels.findIndex(
           (item) =>
@@ -268,6 +511,7 @@ export class Editor {
             s.ele = child as HTMLSpanElement
           }
         } else {
+          console.log(block?.spans.length)
           const index = block?.spans.length || 0
           s = {
             index,
@@ -280,6 +524,9 @@ export class Editor {
         fragment.append(child)
       }
     }
+    /**
+     * 更新样式，通过先删除后添加的方式更新
+     */
     for (const el of block?.spans || []) {
       if (el.ele.nodeName === 'SPAN') {
         this.clearStyle(el.ele as HTMLElement)
@@ -290,6 +537,9 @@ export class Editor {
         }
       }
     }
+    /**
+     * 选择插入节点的位置
+     */
     if (range?.startContainer.parentElement?.nodeName === 'SPAN') {
       for (const child of Array.from(fragment.childNodes || [])) {
         if (child.nodeName === '#text') {
@@ -304,7 +554,7 @@ export class Editor {
           )
         }
       }
-      range?.startContainer.parentElement.remove()
+      // range?.startContainer.parentElement.remove()
     } else {
       range?.insertNode(fragment)
     }

@@ -22,3 +22,6 @@
 .menu-button:last-child {
   @apply border-none;
 }
+.block {
+  @apply outline-none;
+}
