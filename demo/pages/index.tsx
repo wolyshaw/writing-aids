@@ -2,7 +2,7 @@ import type { NextComponentType, NextPage } from 'next'
 import Head from 'next/head'
 import { useState, createRef, FormEvent, useEffect, createFactory } from 'react'
 import { useKey, useEffectOnce, useEvent } from 'react-use'
-import { Editor } from '../editor'
+import { Editor } from 'writing-aids'
 
 const Home: NextPage = (props) => {
   const editor = createRef<HTMLDivElement>()
@@ -43,6 +43,9 @@ const Home: NextPage = (props) => {
             left: rect.x,
           }}
         >
+          <button className="menu-button" onClick={() => meditor?.toolHeader()}>
+            标题
+          </button>
           <button
             className="menu-button"
             onClick={() => meditor?.toolThickening()}
